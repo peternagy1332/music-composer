@@ -1,0 +1,11 @@
+.idea/
+.vs/
+daily/
+nightly*/
+result/
+tracks/
+*.zip
+*.docx
+*.pdf
+*.pptx
+weights*
