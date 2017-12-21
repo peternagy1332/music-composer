@@ -7,7 +7,9 @@ Since it learns based on WAV files with high dynamic range, the output is quite 
 A more detailed README.md is coming soon...
 
 ## The architecture
-![Architecture](https://github.com/peternagy1332/music-composer/blob/master/assets/arch.png?raw=true =300x "Architecture")
+I used two time-distributed dense layers as input and output and LSTMs between them.
+
+<img src="https://github.com/peternagy1332/music-composer/blob/master/assets/arch.png?raw=true" width="50%"/>
 
 ## Acknowledgement
 Thanks for Matt Vitelli and Aran Nayebi for their remarkable work (https://github.com/MattVitelli/GRUV) that was the kickstarter of this project.
