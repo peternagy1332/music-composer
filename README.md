@@ -1,4 +1,4 @@
-# Algorithmic Music Generation with Recurrent Neural Network
+# Algorithmic music generation using recurrent neural networks
 
 The model is capable to learn the style of a given artist and continue a previously unseen music in that style.
 
