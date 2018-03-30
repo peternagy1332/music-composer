@@ -1,5 +1,7 @@
 # Algorithmic music generation using recurrent neural networks
 
+## Summary
+
 The model is capable to learn the style of a given artist and continue a previously unseen music in that style.
 
 Since it learns based on WAV files with high dynamic range, the output is quite noisy as well. The neural net receives a random clip of your training dataset and emits a possible continuation which will be fed into the network again, and so on. That's why the noise is becoming louder and louder. Nonetheless, if the music were written for e.g. piano, better results could be accomplished, since that would be more "simple" for the net.
@@ -23,9 +25,6 @@ $ cd music-composer
 $ pip install -r requirements.txt
 
 ```
-1. Create two folders in the root of the project (the names are configurable in the arguments):
-  - for your *.wav files: datasets/ 
-  - an empty folder for caching the preprocessed *.wav files: train_data/
 
 ### Let the machine do the art
 
@@ -72,6 +71,8 @@ optional arguments:
                         Default: 10
 
 ```
+
+It's worth to keep in mind that if you add or remove wav files, you should regenerate the training data by deleting the content of the traindata folder.
 
 ## The architecture
 I used two time-distributed dense layers as input and output and LSTMs between them.
