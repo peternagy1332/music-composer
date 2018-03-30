@@ -1,6 +1,6 @@
 import glob
 import random
-
+import argparse
 import scipy.io.wavfile as wav
 import numpy as np
 from keras.layers import Dense
@@ -20,6 +20,7 @@ def folder2examples(dataset_folder_path, traindata_folder_path, block_size, bloc
 
     current_block = 0
     total_blocks = len(block_list_x)
+    print("Total blocks in dataset: ",total_blocks)
     while current_block + blocks_in_clip < total_blocks:
         clips_x.append(block_list_x[current_block:current_block + blocks_in_clip])
         clips_y.append(block_list_y[current_block:current_block + blocks_in_clip])
@@ -61,6 +62,7 @@ def dataset2blocks(dataset_folder_path, block_size, blocks_in_clip):
     for wav_file in glob.glob(dataset_folder_path + '*.wav'):
         data, bitrate = wav2ndarray(wav_file)
         #data = data.reshape((1,data.shape[0]))
+        data = data[:,1] # Dropping right channel
         print('Concatenating track with shape ' + str(data.shape) + ' to long wav. ', end='')
         long_wav = np.concatenate((long_wav, data), axis=0)
         print('New long wav shape: ' + str(long_wav.shape))
@@ -154,12 +156,14 @@ def doArt(model, num_of_blocks_to_generate, training_data, variance, mean):
 
 def wav2ndarray(filename):
     data = wav.read(filename)
-    np_arr = data[1].astype(np.float) / 32767.0 # Normalize 16-bit input to [-1, 1] range
+    # Normalize 16-bit input to [-1, 1] range
+    np_arr = data[1].astype(np.float) / 32767.0
     return np_arr, data[0]
 
 
 def ndarray2wav(X, sample_rate, filename):
-    X = (X*32767.0).astype(np.int16) # Scale up to [-32768, 32767] 16-bit PCM
+    # Scale up to [-32768, 32767] 16-bit PCM
+    X = (X*32767.0).astype(np.int16)
     wav.write(filename, sample_rate, X.T)
 
 
@@ -167,9 +171,26 @@ def save_extrapolation(filename, generated_sequence, sample_frequency, variance,
     ndarray2wav(generated_sequence, sample_frequency, filename)
 
 def main():
-    dataset_folder_path = 'datasets/'
-    traindata_folder_path = 'train_data/'
-    generated_music_name = 'output'
+    parser = argparse.ArgumentParser(description="Algorithmic music generator using a recurrent neural network")
+
+    parser.add_argument("-d", "--datasets-folder-path", required=False, default="input_music_dataset/", help="A folder for your *.wav files.")
+    parser.add_argument("-t", "--traindata-folder-path", required=False, default="train_data/", help="An empty folder for caching the preprocessed *.wav files.")
+    parser.add_argument("-o", "--output-music-name", required=False, default="output", help="The name of the output music.")
+    parser.add_argument("-n", "--hidden-layer-neurons", required=False, default=1024, help="The number of LSTM neurons in each hidden layer.")
+    parser.add_argument("-l", "--hidden-layer-count", required=False, default=4, help="The number of hidden layers.")
+    parser.add_argument("-e", "--epochs", required=False, default=20, help="The number of total epochs.")
+    parser.add_argument("-b", "--batch-size", required=False, default=10, help="The size of a training batch.")
+    parser.add_argument("-s", "--seconds-to-generate", required=False, default=10, help="The length of the generated music in seconds.")
+    parser.add_argument("-g", "--generated-music-num", required=False, default=10, help="How many music samples to generate.")
+    args = parser.parse_args()
+
+    if not os.path.exists(args.datasets_folder_path):
+        os.makedirs(args.datasets_folder_path)
+        raise ValueError("The dataset folder is not specified. I created it for now, but you should populate it with your *.wav files.")
+
+    if not os.path.exists(args.traindata_folder_path):
+        os.makedirs(args.traindata_folder_path)
+
 
     sampling_frequency = 44100
     clip_length = 1
@@ -178,23 +199,33 @@ def main():
 
     # sequence of blocks length
     blocks_in_clip = int(round((sampling_frequency * clip_length) / block_size))
-    print('Blocks in clip: ' + str(blocks_in_clip))
+    print('Blocks in a clip: ' + str(blocks_in_clip))
 
     # if train data folder is empty, transform WAVs into examples
-    if not os.listdir(traindata_folder_path):
-        folder2examples(dataset_folder_path, traindata_folder_path, block_size, blocks_in_clip)
+    if not os.listdir(args.traindata_folder_path):
+        print("No cached training data. Creating from ",args.datasets_folder_path," to ", args.traindata_folder_path)
+        folder2examples(args.datasets_folder_path, args.traindata_folder_path, block_size, blocks_in_clip)
+    else:
+        print("Traindata folder path (",args.traindata_folder_path,") is not empty. Using cached train examples.")
 
-    model = spawn_network(block_size=block_size, blocks_in_clip=blocks_in_clip, hidden_layer_neurons=1024, hidden_layer_count=4)
+    model = spawn_network(block_size=block_size, blocks_in_clip=blocks_in_clip, hidden_layer_neurons=args.hidden_layer_neurons, hidden_layer_count=args.hidden_layer_count)
     print(model.summary())
 
     print('Loading train data ...')
-    x_train = np.load(traindata_folder_path + 'examples_x.npy')
-    y_train = np.load(traindata_folder_path + 'examples_y.npy')
-    x_mean = np.load(traindata_folder_path + 'examples_mean.npy')
-    x_var = np.load(traindata_folder_path + 'examples_var.npy')
+    x_train = np.load(args.traindata_folder_path + 'examples_x.npy')
+    y_train = np.load(args.traindata_folder_path + 'examples_y.npy')
+    x_mean = np.load(args.traindata_folder_path + 'examples_mean.npy')
+    x_var = np.load(args.traindata_folder_path + 'examples_var.npy')
+    print("x_train.shape: ", x_train.shape)
+    print("y_train.shape: ", y_train.shape)
+    print("x_mean.shape", x_mean.shape)
+    print("x_var.shape", x_var.shape)
     print('... train data loaded!')
 
     print('# of examples: ' + str(x_train.shape[0]))
+
+    if x_train.shape[0] < args.batch_size:
+        raise ValueError("Not enough training data!")
 
     if os.path.isfile('weights'):
         print('Loading existing weights ...')
@@ -202,15 +233,15 @@ def main():
         print('... weights loaded!')
 
     print('Training started...')
-    history = model.fit(x_train, y_train, batch_size=10, epochs=20, verbose=1)
+    history = model.fit(x_train, y_train, batch_size=args.batch_size, epochs=args.epochs, verbose=1)
     print(history.history)
     model.save_weights('weights')
     print('... training stopped!')
 
     print('Art is happening ...')
-    for i in range(10):
-        output = doArt(model, num_of_blocks_to_generate=10, training_data=x_train, variance=x_var, mean=x_mean)
-        save_extrapolation(generated_music_name + '-' + str(i) + '.wav', output, sample_frequency=sampling_frequency, variance=x_var, mean=x_mean)
+    for i in range(args.generated_music_num):
+        output = doArt(model, num_of_blocks_to_generate=args.second_to_generate, training_data=x_train, variance=x_var, mean=x_mean)
+        save_extrapolation(args.output_music_name + '-' + str(i) + '.wav', output, sample_frequency=sampling_frequency, variance=x_var, mean=x_mean)
     print('... art happened!')
 
 
